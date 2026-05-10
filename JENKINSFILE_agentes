@@ -6,11 +6,16 @@ pipeline {
         stage('Get Code') {
             agent { label 'general' }
             steps {
-                whoami
-                hostname
+                bat '''
+                    whoami
+                    hostname
+                '''
                 echo "${WORKSPACE}"
 
                 git 'https://github.com/andresfalla/cp12'
+
+                // Guardamos TODO el código para los stages paralelos
+                stash name: 'code', includes: '**'
             }
         }
 
@@ -20,22 +25,33 @@ pipeline {
                 stage('Unit') {
                     agent { label 'general' }
                     steps {
-                        whoami
-                        hostname
+                        unstash 'code'
+
+                        bat '''
+                            whoami
+                            hostname
+                        '''
                         echo "${WORKSPACE}"
 
                         bat '''
                             set PYTHONPATH=%WORKSPACE%
                             pytest --junitxml=result-unit.xml test\\unit
                         '''
+
+                        // Guardamos el resultado para el stage Unit Results
+                        stash name: 'result-unit', includes: 'result-unit.xml'
                     }
                 }
 
                 stage('Rest') {
                     agent { label 'general' }
                     steps {
-                        whoami
-                        hostname
+                        unstash 'code'
+
+                        bat '''
+                            whoami
+                            hostname
+                        '''
                         echo "${WORKSPACE}"
 
                         bat '''
@@ -46,34 +62,57 @@ pipeline {
                             start java -jar "%WORKSPACE%\\test\\wiremock\\wiremock-standalone-3.13.2.jar" --port 9090 --root-dir "%WORKSPACE%\\test\\wiremock"
                             pytest --junitxml=result-rest.xml test\\rest
                         '''
+
+                        // Guardamos el resultado para el stage Rest Results
+                        stash name: 'result-rest', includes: 'result-rest.xml'
                     }
                 }
 
                 stage('Static') {
                     agent { label 'general' }
                     steps {
-                        whoami
-                        hostname
+                        unstash 'code'
+
+                        bat '''
+                            whoami
+                            hostname
+                        '''
                         echo "${WORKSPACE}"
 
                         bat '''
                             flake8 --exit-zero --format=pylint app > flake8.out
                         '''
-                        recordIssues qualityGates: [[criticality: 'NOTE', integerThreshold: 8, threshold: 8.0, type: 'TOTAL'], [criticality: 'FAILURE', integerThreshold: 10, threshold: 10.0, type: 'TOTAL']], sourceCodeRetention: 'LAST_BUILD', tools: [pyLint(pattern: 'flake8.out')]
+
+                        recordIssues qualityGates: [
+                            [criticality: 'NOTE', integerThreshold: 8, threshold: 8.0, type: 'TOTAL'],
+                            [criticality: 'FAILURE', integerThreshold: 10, threshold: 10.0, type: 'TOTAL']
+                        ],
+                        sourceCodeRetention: 'LAST_BUILD',
+                        tools: [pyLint(pattern: 'flake8.out')]
                     }
                 }
 
                 stage('Security') {
                     agent { label 'general' }
                     steps {
-                        whoami
-                        hostname
+                        unstash 'code'
+
+                        bat '''
+                            whoami
+                            hostname
+                        '''
                         echo "${WORKSPACE}"
 
                         bat '''
                             bandit --exit-zero -r . -f custom -o bandit.out --msg-template "{abspath}:{line}: [{test_id}]: {msg}"
                         '''
-                        recordIssues qualityGates: [[integerThreshold: 2, threshold: 2.0, type: 'TOTAL'], [criticality: 'FAILURE', integerThreshold: 4, threshold: 4.0, type: 'TOTAL']], sourceCodeRetention: 'LAST_BUILD', tools: [pyLint(pattern: 'bandit.out')]
+
+                        recordIssues qualityGates: [
+                            [integerThreshold: 2, threshold: 2.0, type: 'TOTAL'],
+                            [criticality: 'FAILURE', integerThreshold: 4, threshold: 4.0, type: 'TOTAL']
+                        ],
+                        sourceCodeRetention: 'LAST_BUILD',
+                        tools: [pyLint(pattern: 'bandit.out')]
                     }
                 }
             }
@@ -82,8 +121,12 @@ pipeline {
         stage('Unit Results') {
             agent { label 'general' }
             steps {
-                whoami
-                hostname
+                unstash 'result-unit'
+
+                bat '''
+                    whoami
+                    hostname
+                '''
                 echo "${WORKSPACE}"
 
                 junit 'result-unit.xml'
@@ -93,8 +136,12 @@ pipeline {
         stage('Rest Results') {
             agent { label 'general' }
             steps {
-                whoami
-                hostname
+                unstash 'result-rest'
+
+                bat '''
+                    whoami
+                    hostname
+                '''
                 echo "${WORKSPACE}"
 
                 junit 'result-rest.xml'
@@ -104,8 +151,12 @@ pipeline {
         stage('Coverage') {
             agent { label 'general' }
             steps {
-                whoami
-                hostname
+                unstash 'code'
+
+                bat '''
+                    whoami
+                    hostname
+                '''
                 echo "${WORKSPACE}"
 
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
@@ -114,15 +165,26 @@ pipeline {
                         coverage xml
                     '''
                 }
-                recordCoverage qualityGates: [[integerThreshold: 95, metric: 'LINE', threshold: 95.0], [criticality: 'FAILURE', integerThreshold: 85, metric: 'LINE', threshold: 85.0], [integerThreshold: 90, metric: 'BRANCH', threshold: 90.0], [criticality: 'FAILURE', integerThreshold: 80, metric: 'BRANCH', threshold: 80.0]], tools: [[parser: 'COBERTURA', pattern: 'coverage.xml']]
+
+                recordCoverage qualityGates: [
+                    [integerThreshold: 95, metric: 'LINE', threshold: 95.0],
+                    [criticality: 'FAILURE', integerThreshold: 85, metric: 'LINE', threshold: 85.0],
+                    [integerThreshold: 90, metric: 'BRANCH', threshold: 90.0],
+                    [criticality: 'FAILURE', integerThreshold: 80, metric: 'BRANCH', threshold: 80.0]
+                ],
+                tools: [[parser: 'COBERTURA', pattern: 'coverage.xml']]
             }
         }
 
         stage('Performance') {
             agent { label 'performance' }
             steps {
-                whoami
-                hostname
+                unstash 'code'
+
+                bat '''
+                    whoami
+                    hostname
+                '''
                 echo "${WORKSPACE}"
 
                 bat '''
@@ -134,14 +196,16 @@ pipeline {
 
                     "C:\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat" -n -t test\\jmeter\\flask.jmx -f -l flask.jtl
                 '''
+
                 perfReport sourceDataFiles: 'flask.jtl'
             }
         }
-    }
 
-    post {
-        always {
-            cleanWs()
+        stage('Cleanup') {
+            agent { label 'general' }
+            steps {
+                cleanWs()
+            }
         }
     }
 }
