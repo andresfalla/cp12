@@ -1,12 +1,12 @@
 pipeline {
     agent any	
-	stage('Get Code') {
-		steps {
-			// Obtener código del repo
-			git 'https://github.com/andresfalla/helloworld'
-		}
-    }
     stages {
+		stage ('Get Code') {
+				steps {
+				// Obtener código del repo
+				git 'https://github.com/andresfalla/helloworld'
+			}
+	    }
         stage('Test') {
             parallel {
 
