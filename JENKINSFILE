@@ -2,13 +2,6 @@ pipeline {
     agent any
 
     stages {
-
-        stage('Get Code') {
-            steps {
-                git 'https://github.com/andresfalla/cp12'
-            }
-        }
-
         stage('Test') {
             parallel {
 
