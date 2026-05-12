@@ -4,7 +4,7 @@ pipeline {
 		stage ('Get Code') {
 				steps {
 				// Obtener código del repo
-				git 'https://github.com/andresfalla/cp12'
+				git branch: "${params.branch}", url: "https://github.com/andresfalla/cp12.git"
 			}
 	    }
         stage('Test') {
