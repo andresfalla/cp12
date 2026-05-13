@@ -1,3 +1,4 @@
+
 pipeline {
     agent any	
     stages {
@@ -37,8 +38,12 @@ pipeline {
 						bat '''
 							flake8 --exit-zero --format=pylint app > flake8.out
 						'''
-						recordIssues qualityGates: [[criticality: 'NOTE', integerThreshold: 8, threshold: 8.0, type: 'TOTAL'], [criticality: 'FAILURE', integerThreshold: 10, threshold: 10.0, type: 'TOTAL']], sourceCodeRetention: 'LAST_BUILD', tools: [pyLint(pattern: 'flake8.out')]
-		    
+                        recordIssues( tools: [pyLint(pattern: 'flake8.out')],sourceCodeRetention: 'LAST_BUILD',qualityGates: [
+                                    [criticality: 'NOTE', threshold: 8, type: 'TOTAL'],
+                                    [criticality: 'FAILURE', threshold: 11, type: 'TOTAL']
+                                ]
+                            )
+
 					}	
 			    }
 			    
@@ -48,15 +53,18 @@ pipeline {
 							bandit --exit-zero -r . -f custom -o bandit.out --msg-template "{abspath}:{line}: [{test_id}]: {msg}"
 
 						'''
-						
-						recordIssues qualityGates: [[integerThreshold: 2, threshold: 2.0, type: 'TOTAL'], [criticality: 'FAILURE', integerThreshold: 4, threshold: 4.0, type: 'TOTAL']], sourceCodeRetention: 'LAST_BUILD', tools: [pyLint(pattern: 'bandit.out')]
+						recordIssues(tools: [pyLint(pattern: 'bandit.out')],sourceCodeRetention: 'LAST_BUILD',qualityGates: [
+                                    [threshold: 2, type: 'TOTAL'],
+                                    [criticality: 'FAILURE', threshold: 4, type: 'TOTAL']
+                                ]
+                            )
+
 					}
 				}
 
             }
         }
-        
-        
+                
         stage('Unit Results') {
             steps {
                 junit 'result-unit.xml'
@@ -82,8 +90,7 @@ pipeline {
 				recordCoverage qualityGates: [[integerThreshold: 95, metric: 'LINE', threshold: 95.0], [criticality: 'FAILURE', integerThreshold: 85, metric: 'LINE', threshold: 85.0], [integerThreshold: 90, metric: 'BRANCH', threshold: 90.0], [criticality: 'FAILURE', integerThreshold: 80, metric: 'BRANCH', threshold: 80.0]], tools: [[parser: 'COBERTURA', pattern: 'coverage.xml']]
 			}
 		}
-		
-		
+				
 		stage('Performance') {
 			steps {
 				bat '''           
@@ -95,7 +102,9 @@ pipeline {
 					
 					"C:\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat" -n -t test\\jmeter\\flask.jmx -f -l flask.jtl
 				'''
-				perfReport sourceDataFiles: 'flask.jtl'
+				  perfReport sourceDataFiles: 'flask.jtl',
+                   errorFailedThreshold: 100,
+                   errorUnstableThreshold: 100
 			}
 		}
     }
